@@ -200,7 +200,7 @@ cron.schedule("0 07 * * *", () => {
         console.log("JSON Data is not valid");
       }
     } else {
-      console.log("Sin concursos encontrados");
+        transporter.sendEmailNotFoundCourses();
     }
 
     await browser.close();
