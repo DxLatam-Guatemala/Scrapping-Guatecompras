@@ -9,32 +9,32 @@ const cron = require("node-cron");
 cron.schedule("0 07 * * *", () => {
   (async () => {
     const browser = await puppeteer.launch({
-      headless: true,
+      headless: false,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     const page = await browser.newPage();
-    const dateouput = getDate();
 
-    let rawdata = fs.readFileSync("wordsSearch.json");
-    const wordsSearch = JSON.parse(rawdata);
+    let rawdata = fs.readFileSync("wordsSearch.json").toString();
 
     let concursos = [];
 
-    for (let wordSearch of wordsSearch) {
     page.setDefaultNavigationTimeout(0);
-      await page.goto(
-        "https://www.guatecompras.gt/concursos/busquedaTexto.aspx?t=" +
-          wordSearch,{
-            waitUntil:'load',
-            timeout:0
-          }
-      );
+    await page.goto(
+      "https://www.guatecompras.gt/concursos/consultaConcursos.aspx?o=1&d=1&c=2"
+    );
 
-      await page.waitForSelector(".TablaFilaMix1");
-      await page.waitForSelector(".TablaFilaMix2");
+    // await page.click('#lnk-concurso > a');
+    // Selecciona esto por el momento para lograr obtener data
+    // await page.click('#chkUltimos7');
 
+
+    await page.waitForSelector(".FilaTablaDetalle");
+    await page.waitForSelector(".FilaTablaDetallef");
+
+    try {
       concursos = await page.evaluate(
-        (wordSearch, concursos) => {
+        (rawdata, concursos) => {
+          let wordsSearch = JSON.parse(rawdata);
           //Fechas que se muestran en la página
           const months = [
             "ene",
@@ -64,133 +64,156 @@ cron.schedule("0 07 * * *", () => {
           year = dateYesterday.getFullYear();
           dateYesterday = year + "-" + month + "-" + date;
 
-          console.log(dateToday);
-          console.log(dateYesterday);
-
           //Se obtiene la información así, ya que las clases de las filas en los concursos son con clases diferentes.
-          var elementsRow1 = document.getElementsByClassName("TablaFilaMix1");
-          var elementsRow2 = document.querySelectorAll(".TablaFilaMix2");
-
+          var elementsRow1 = document.getElementsByClassName("FilaTablaDetalle");
+          var elementsRow2 = document.querySelectorAll(".FilaTablaDetallef");
+          var textos = '';
           for (let element of elementsRow1) {
-            let no_operacion = element.querySelector(
-              'td div [title="NOG (Número de Operación Guatecompras)"]'
-            ).innerHTML;
-            let fecha_publicacion = element.querySelector(
-              'td div [title="Fecha de publicación"]'
-            ).innerHTML;
-            let fecha_limite_oferta = element.querySelector(
-              'td div [title="Fecha límite para ofertar"]'
-            ).innerHTML;
-            let titulo = element
+            let descripcion = element
               .querySelector('td div [title="Descripción del concurso"]')
               .innerHTML.replace("<br>", "")
               .replace("<b>", "")
               .replace("</b>", "");
-            let estatus = element.querySelector(
-              'td div [title="Estatus del concurso"]'
-            ).innerHTML;
-            let entidad_publica = element.querySelector(
-              'td div [title="Entidad que publica"]'
-            ).innerHTML;
-            //Fecha convertida a formato: Y-m-d
-            fecha_publicacion =
-              fecha_publicacion.substring(8, 12) +
-              "-" +
-              (
-                "0" +
-                (months.indexOf(fecha_publicacion.substring(3, 6)) + 1)
-              ).slice(-2) +
-              "-" +
-              fecha_publicacion.substring(-1, 2);
-            fecha_limite_oferta =
-              fecha_limite_oferta.substring(8, 12) +
-              "-" +
-              (
-                "0" +
-                (months.indexOf(fecha_limite_oferta.substring(3, 6)) + 1)
-              ).slice(-2) +
-              "-" +
-              fecha_limite_oferta.substring(-1, 2);
-            if (
-              new Date(dateToday).getTime() ==
-                new Date(fecha_publicacion).getTime() ||
-              new Date(dateYesterday).getTime() ==
-                new Date(fecha_publicacion).getTime()
-            ) {
-              concursos.push({
-                wordSearch,
-                no_operacion,
-                fecha_publicacion,
-                fecha_limite_oferta,
-                titulo,
-                estatus,
-                entidad_publica
-              });
+            for (let wordSearch of wordsSearch) {
+              textos = textos + ' ' + descripcion;
+              if (descripcion.toLowerCase().search(wordSearch.toLowerCase()) != -1) {
+                let no_operacion = element.querySelector(
+                  'td div [title="NOG (Número de Operación Guatecompras)"]'
+                ).innerHTML;
+                let fecha_publicacion = element.querySelector(
+                  'td div [title="Fecha de publicación"]'
+                ).innerHTML;
+                fecha_publicacion = fecha_publicacion.replace(/\s+/g, "");
+                let fecha_limite_oferta = element.querySelector(
+                  'td div [title="Fecha límite para ofertar"]'
+                ).innerHTML;
+                fecha_limite_oferta = fecha_limite_oferta.replace(/\s+/g, "");
+                let titulo = element
+                  .querySelector('td div [title="Descripción del concurso"]')
+                  .innerHTML.replace("<br>", "")
+                  .replace("<b>", "")
+                  .replace("</b>", "");
+                let estatus = element.querySelector(
+                  'td div [title="Estatus del concurso"]'
+                ).innerHTML;
+                let entidad_publica = element.querySelector(
+                  'td div [title="Entidad que publica"]'
+                ).innerHTML;
+                //Fecha convertida a formato: Y-m-d
+                fecha_publicacion =
+                  fecha_publicacion.substring(8, 12) +
+                  "-" +
+                  (
+                    "0" +
+                    (months.indexOf(fecha_publicacion.substring(3, 6)) + 1)
+                  ).slice(-2) +
+                  "-" +
+                  fecha_publicacion.substring(-1, 2);
+
+                fecha_limite_oferta =
+                  fecha_limite_oferta.substring(8, 12) +
+                  "-" +
+                  (
+                    "0" +
+                    (months.indexOf(fecha_limite_oferta.substring(3, 6)) + 1)
+                  ).slice(-2) +
+                  "-" +
+                  fecha_limite_oferta.substring(-1, 2);
+                if (
+                  new Date(dateToday).getTime() ==
+                  new Date(fecha_publicacion).getTime() ||
+                  new Date(dateYesterday).getTime() ==
+                  new Date(fecha_publicacion).getTime()
+                ) {
+                  concursos.push({
+                    wordSearch,
+                    no_operacion,
+                    fecha_publicacion,
+                    fecha_limite_oferta,
+                    titulo,
+                    estatus,
+                    entidad_publica
+                  });
+                }
+              }
             }
           }
 
           for (let element of elementsRow2) {
-            let no_operacion = element.querySelector(
-              'td div [title="NOG (Número de Operación Guatecompras)"]'
-            ).innerHTML;
-            let fecha_publicacion = element.querySelector(
-              'td div [title="Fecha de publicación"]'
-            ).innerHTML;
-            let fecha_limite_oferta = element.querySelector(
-              'td div [title="Fecha límite para ofertar"]'
-            ).innerHTML;
-            let titulo = element
+            let descripcion = element
               .querySelector('td div [title="Descripción del concurso"]')
               .innerHTML.replace("<br>", "")
               .replace("<b>", "")
               .replace("</b>", "");
-            let estatus = element.querySelector(
-              'td div [title="Estatus del concurso"]'
-            ).innerHTML;
-            let entidad_publica = element.querySelector(
-              'td div [title="Entidad que publica"]'
-            ).innerHTML;
-            //Fecha convertida a formato: Y-m-d
-            fecha_publicacion =
-              fecha_publicacion.substring(8, 12) +
-              "-" +
-              (
-                "0" +
-                (months.indexOf(fecha_publicacion.substring(3, 6)) + 1)
-              ).slice(-2) +
-              "-" +
-              fecha_publicacion.substring(-1, 2);
-            fecha_limite_oferta =
-              fecha_limite_oferta.substring(8, 12) +
-              "-" +
-              (
-                "0" +
-                (months.indexOf(fecha_limite_oferta.substring(3, 6)) + 1)
-              ).slice(-2) +
-              "-" +
-              fecha_limite_oferta.substring(-1, 2);
-            if (
-              new Date(dateToday).getTime() ==
-                new Date(fecha_publicacion).getTime() ||
-              new Date(dateYesterday).getTime() ==
-                new Date(fecha_publicacion).getTime()
-            ) {
-              concursos.push({
-                wordSearch,
-                no_operacion,
-                fecha_publicacion,
-                fecha_limite_oferta,
-                titulo,
-                estatus,
-                entidad_publica,
-              });
+            for (let wordSearch of wordsSearch) {
+              if (descripcion.toLowerCase().search(wordSearch.toLowerCase()) != -1) {
+                let no_operacion = element.querySelector(
+                  'td div [title="NOG (Número de Operación Guatecompras)"]'
+                ).innerHTML;
+                let fecha_publicacion = element.querySelector(
+                  'td div [title="Fecha de publicación"]'
+                ).innerHTML;
+                fecha_publicacion = fecha_publicacion.replace(/\s+/g, "");
+                let fecha_limite_oferta = element.querySelector(
+                  'td div [title="Fecha límite para ofertar"]'
+                ).innerHTML;
+                fecha_limite_oferta = fecha_limite_oferta.replace(/\s+/g, "");
+                let titulo = element
+                  .querySelector('td div [title="Descripción del concurso"]')
+                  .innerHTML.replace("<br>", "")
+                  .replace("<b>", "")
+                  .replace("</b>", "");
+                let estatus = element.querySelector(
+                  'td div [title="Estatus del concurso"]'
+                ).innerHTML;
+                let entidad_publica = element.querySelector(
+                  'td div [title="Entidad que publica"]'
+                ).innerHTML;
+                //Fecha convertida a formato: Y-m-d
+                fecha_publicacion =
+                  fecha_publicacion.substring(8, 12) +
+                  "-" +
+                  (
+                    "0" +
+                    (months.indexOf(fecha_publicacion.substring(3, 6)) + 1)
+                  ).slice(-2) +
+                  "-" +
+                  fecha_publicacion.substring(-1, 2);
+                fecha_limite_oferta =
+                  fecha_limite_oferta.substring(8, 12) +
+                  "-" +
+                  (
+                    "0" +
+                    (months.indexOf(fecha_limite_oferta.substring(3, 6)) + 1)
+                  ).slice(-2) +
+                  "-" +
+                  fecha_limite_oferta.substring(-1, 2);
+                if (
+                  new Date(dateToday).getTime() ==
+                  new Date(fecha_publicacion).getTime() ||
+                  new Date(dateYesterday).getTime() ==
+                  new Date(fecha_publicacion).getTime()
+                ) {
+                  concursos.push({
+                    wordSearch,
+                    no_operacion,
+                    fecha_publicacion,
+                    fecha_limite_oferta,
+                    titulo,
+                    estatus,
+                    entidad_publica,
+                  });
+                }
+              }
             }
           }
           return concursos;
         },
-        wordSearch,
+        rawdata,
         concursos
       );
+    } catch (error) {
+      console.error(error);
     }
 
     if (concursos.length > 0) {
@@ -200,19 +223,9 @@ cron.schedule("0 07 * * *", () => {
         console.log("JSON Data is not valid");
       }
     } else {
-        transporter.sendEmailNotFoundCourses();
+      transporter.sendEmailNotFoundCourses();
     }
 
     await browser.close();
   })();
 });
-
-var getDate = function () {
-  let date_ob = new Date();
-  let date = ("0" + date_ob.getDate()).slice(-2);
-  let month = ("0" + (date_ob.getMonth() + 1)).slice(-2);
-  let year = date_ob.getFullYear();
-  let dateToday = year + "-" + month + "-" + date;
-
-  return dateToday;
-};
