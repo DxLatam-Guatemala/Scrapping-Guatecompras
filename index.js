@@ -9,7 +9,7 @@ const cron = require("node-cron");
 cron.schedule("0 07 * * *", () => {
   (async () => {
     const browser = await puppeteer.launch({
-      headless: false,
+      headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     const page = await browser.newPage();
